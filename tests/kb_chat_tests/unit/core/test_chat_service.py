@@ -1,9 +1,11 @@
 import pytest
+from unittest.mock import AsyncMock
 
 from kb_chat.core.chat.abc import ChatServiceError
 from kb_chat.core.chat.impl.service import KnowledgeBaseChatService
 from kb_chat.core.knowledge_base.impl.in_memory import InMemoryKnowledgeBase
 from kb_chat.core.llm.impl.random import RandomLLMClient
+from kb_chat.core.cache.abc import CacheStorage
 from kb_chat.domain.models import TopicContent
 
 
@@ -21,14 +23,25 @@ class TestKnowledgeBaseChatService:
         return RandomLLMClient(model="test-model")
 
     @pytest.fixture
+    def mock_cache(self) -> CacheStorage:
+        cache = AsyncMock(spec=CacheStorage)
+        cache.get = AsyncMock(return_value=None)
+        cache.set = AsyncMock()
+        cache.map_topic_to_keys = AsyncMock()
+        cache.invalidate_topic = AsyncMock()
+        return cache
+
+    @pytest.fixture
     def chat_service(
         self,
         knowledge_base: InMemoryKnowledgeBase,
         llm_client: RandomLLMClient,
+        mock_cache: CacheStorage,
     ) -> KnowledgeBaseChatService:
         return KnowledgeBaseChatService(
             knowledge_base=knowledge_base,
             llm_client=llm_client,
+            cache=mock_cache,
             default_temperature=0.7,
         )
 

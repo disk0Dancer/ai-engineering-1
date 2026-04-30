@@ -1,6 +1,7 @@
 import logging
 import typing as t
 from contextlib import asynccontextmanager
+import redis.asyncio as aioredis
 
 from fastapi import FastAPI
 
@@ -9,6 +10,7 @@ from kb_chat.configuration import Configuration
 from kb_chat.core.chat.impl.service import KnowledgeBaseChatService
 from kb_chat.core.knowledge_base.impl.in_memory import InMemoryKnowledgeBase
 from kb_chat.core.llm.impl.random import RandomLLMClient
+from kb_chat.core.cache.impl.redis import RedisCacheStorage
 
 logger = logging.getLogger(__name__)
 
@@ -32,9 +34,14 @@ async def lifespan(app: FastAPI) -> t.AsyncGenerator[None, None]:
 
     knowledge_base = InMemoryKnowledgeBase()
     llm_client = RandomLLMClient(model=configuration.llm.model)
+
+    redis_client = aioredis.Redis(host="localhost", port=6379, decode_responses=True)
+    cache = RedisCacheStorage(redis_client, ttl=300)
+
     chat_service = KnowledgeBaseChatService(
         knowledge_base=knowledge_base,
         llm_client=llm_client,
+        cache=cache,
         default_temperature=configuration.llm.temperature,
     )
 

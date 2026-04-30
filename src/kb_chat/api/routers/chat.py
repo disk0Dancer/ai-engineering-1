@@ -66,3 +66,9 @@ async def chat(body: ChatRequest, request: Request) -> ChatResponse:
         model=result.model,
         cached=result.cached,
     )
+
+@chat_router.post("/cache/invalidate/{topic}")
+async def invalidate_cache(topic: str, request: Request) -> dict:
+    cache = request.app.state.cache
+    await cache.invalidate_topic(topic)
+    return {"status": "ok", "topic": topic}
