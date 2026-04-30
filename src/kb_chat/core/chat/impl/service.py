@@ -1,10 +1,12 @@
 import logging
 import textwrap
+import hashlib
 
 from kb_chat.core.chat.abc import ChatService, ChatServiceError
 from kb_chat.core.knowledge_base.abc import KnowledgeBase
 from kb_chat.core.llm.abc import LLMClient
 from kb_chat.domain.models import ChatResult, LLMRequest, TopicContent
+from kb_chat.core.cache.abc import CacheStorage
 
 logger = logging.getLogger(__name__)
 
@@ -12,19 +14,24 @@ logger = logging.getLogger(__name__)
 class KnowledgeBaseChatService(ChatService):
     """
     Chat service that uses knowledge base content to answer questions.
-
-    TODO: Add caching to reduce LLM calls for identical requests.
     """
 
     def __init__(
         self,
         knowledge_base: KnowledgeBase,
         llm_client: LLMClient,
+        cache: CacheStorage,
         default_temperature: float = 0.7,
     ) -> None:
         self.__knowledge_base = knowledge_base
         self.__llm_client = llm_client
         self.__default_temperature = default_temperature
+        self.__cache = cache
+
+    def _make_cache_key(self, prompt: str, system_prompt: str, model: str) -> str:
+        data = f"{prompt}:{system_prompt}:{model}"
+        return hashlib.sha256(data.encode()).hexdigest()
+
 
     async def chat(
         self,
@@ -39,7 +46,15 @@ class KnowledgeBaseChatService(ChatService):
         system_prompt = self.__build_system_prompt(topic_content)
         effective_temperature = temperature if temperature is not None else self.__default_temperature
 
-        # TODO: Check cache here before calling LLM
+        key = self._make_cache_key(question,system_prompt,self.__llm_client.model)
+        cached = await self.__cache.get(key)
+        if cached:
+            return ChatResult(
+            answer=cached,
+            topic=topic,
+            model=self.__llm_client.model,
+            cached=True,
+        )
 
         request = LLMRequest(
             prompt=question,
@@ -50,7 +65,8 @@ class KnowledgeBaseChatService(ChatService):
 
         response = await self.__llm_client.generate(request)
 
-        # TODO: Store response in cache
+        await self.__cache.set(key,response.content)
+        await self.__cache.map_topic_to_keys(topic, key)
 
         return ChatResult(
             answer=response.content,
