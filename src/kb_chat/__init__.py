@@ -9,6 +9,7 @@ from kb_chat.configuration import Configuration
 from kb_chat.core.chat.impl.service import KnowledgeBaseChatService
 from kb_chat.core.knowledge_base.impl.in_memory import InMemoryKnowledgeBase
 from kb_chat.core.llm.impl.random import RandomLLMClient
+import redis.asyncio as redis
 
 logger = logging.getLogger(__name__)
 
@@ -32,10 +33,13 @@ async def lifespan(app: FastAPI) -> t.AsyncGenerator[None, None]:
 
     knowledge_base = InMemoryKnowledgeBase()
     llm_client = RandomLLMClient(model=configuration.llm.model)
+    redis_client = redis.from_url(configuration.cache.redis_url)
     chat_service = KnowledgeBaseChatService(
         knowledge_base=knowledge_base,
         llm_client=llm_client,
         default_temperature=configuration.llm.temperature,
+        redis_client=redis_client,
+        ttl_seconds=configuration.cache.ttl_seconds,
     )
 
     app.state.knowledge_base = knowledge_base
@@ -44,6 +48,7 @@ async def lifespan(app: FastAPI) -> t.AsyncGenerator[None, None]:
 
     yield
 
+    await redis_client.aclose()
     app_logger.info(f"Shutting down {configuration.app_name}")
 
 

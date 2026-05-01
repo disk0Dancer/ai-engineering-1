@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import Field
 
 from kb_chat.core.chat.abc import ChatService, ChatServiceError
+from kb_chat.core.chat.impl.service import KnowledgeBaseChatService
 
 chat_router = APIRouter(tags=["Chat"])
 
@@ -44,13 +45,6 @@ async def chat(body: ChatRequest, request: Request) -> ChatResponse:
     chat_service: ChatService = request.app.state.chat_service
     knowledge_base = request.app.state.knowledge_base
 
-    topic_content = await knowledge_base.get_topic_content(body.topic)
-    if topic_content is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Topic '{body.topic}' not found. Use /topics to see available topics.",
-        )
-
     try:
         result = await chat_service.chat(
             question=body.question,
@@ -66,3 +60,10 @@ async def chat(body: ChatRequest, request: Request) -> ChatResponse:
         model=result.model,
         cached=result.cached,
     )
+
+
+@chat_router.post("/cache/invalidate/{topic}")
+async def invalidate_cache(topic: str, request: Request) -> dict:
+    chat_service: KnowledgeBaseChatService = request.app.state.chat_service
+    await chat_service.invalidate_topic(topic)
+    return {"invalidated": topic}
