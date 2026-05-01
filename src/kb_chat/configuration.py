@@ -14,6 +14,7 @@ class CacheConfig(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra="forbid")
 
     ttl_seconds: int = Field(default=300, ge=1)
+    redis_url: str = Field(default="redis://localhost:6379")
 
 
 class Configuration(BaseSettings):

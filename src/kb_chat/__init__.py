@@ -2,6 +2,7 @@ import logging
 import typing as t
 from contextlib import asynccontextmanager
 
+import redis.asyncio as redis
 from fastapi import FastAPI
 
 from kb_chat.api.routers.chat import chat_router
@@ -32,10 +33,13 @@ async def lifespan(app: FastAPI) -> t.AsyncGenerator[None, None]:
 
     knowledge_base = InMemoryKnowledgeBase()
     llm_client = RandomLLMClient(model=configuration.llm.model)
+    redis_client = redis.from_url(configuration.cache.redis_url)
     chat_service = KnowledgeBaseChatService(
         knowledge_base=knowledge_base,
         llm_client=llm_client,
         default_temperature=configuration.llm.temperature,
+        redis_client=redis_client,
+        ttl_seconds=configuration.cache.ttl_seconds,
     )
 
     app.state.knowledge_base = knowledge_base
@@ -44,6 +48,7 @@ async def lifespan(app: FastAPI) -> t.AsyncGenerator[None, None]:
 
     yield
 
+    await redis_client.aclose()
     app_logger.info(f"Shutting down {configuration.app_name}")
 
 
